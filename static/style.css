@@ -992,4 +992,332 @@ td {
     .wheel-result-value {
         font-size: 22px;
     }
+} 
+/* =========================
+   MOBILE FIX PATCH
+   Dán ở CUỐI static/style.css
+========================= */
+
+html, body {
+    overflow-x: hidden;
+}
+
+img, iframe, video {
+    max-width: 100%;
+    height: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+input, select, textarea, button {
+    font: inherit;
+}
+
+/* Tablet */
+@media (max-width: 1024px) {
+    .container,
+    .main-container,
+    .page-container,
+    .dashboard-container,
+    .class-wrapper,
+    .content-wrapper,
+    .content,
+    .main-content {
+        width: 100%;
+        max-width: 100%;
+        padding-left: 16px !important;
+        padding-right: 16px !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        box-sizing: border-box;
+    }
+
+    .grid,
+    .dashboard-grid,
+    .stats-grid,
+    .card-grid,
+    .class-grid,
+    .tools-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* Mobile chính */
+@media (max-width: 768px) {
+    html {
+        font-size: 15px;
+    }
+
+    body {
+        overflow-x: hidden;
+    }
+
+    /* Header / navbar */
+    header,
+    nav,
+    .navbar,
+    .topbar,
+    .header,
+    .app-header {
+        width: 100%;
+        max-width: 100%;
+        padding: 12px 14px !important;
+        box-sizing: border-box;
+    }
+
+    /* Sidebar/menu trái -> chuyển thành block ngang */
+    .sidebar,
+    .side-menu,
+    .left-menu,
+    aside {
+        position: static !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+        border-right: none !important;
+        margin-bottom: 12px !important;
+    }
+
+    .sidebar ul,
+    .side-menu ul,
+    .left-menu ul,
+    nav ul {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        list-style: none !important;
+    }
+
+    .sidebar a,
+    .side-menu a,
+    .left-menu a,
+    nav a {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 10px 12px !important;
+        border-radius: 12px !important;
+        min-height: 42px !important;
+        text-decoration: none;
+        font-size: 14px !important;
+    }
+
+    /* Khối chính */
+    .container,
+    .main-container,
+    .page-container,
+    .dashboard-container,
+    .class-wrapper,
+    .content-wrapper,
+    .content,
+    .main-content,
+    .page-content {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 12px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Card / section */
+    .card,
+    .panel,
+    .box,
+    .section,
+    .info-card,
+    .stat-card,
+    .tool-card,
+    .student-card {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 14px !important;
+        border-radius: 16px !important;
+        margin-bottom: 12px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Các cụm thống kê */
+    .stats,
+    .stats-grid,
+    .dashboard-grid,
+    .summary-grid,
+    .tool-grid,
+    .action-grid,
+    .quick-actions {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+
+    /* Nút bấm */
+    .btn,
+    button,
+    input[type="submit"],
+    input[type="button"],
+    .action-btn,
+    .btn-primary,
+    .btn-secondary,
+    .btn-danger {
+        width: 100%;
+        min-height: 44px;
+        padding: 12px 14px !important;
+        border-radius: 12px !important;
+        font-size: 15px !important;
+        margin-bottom: 8px !important;
+        box-sizing: border-box;
+    }
+
+    /* Form */
+    form {
+        width: 100%;
+    }
+
+    .form-row,
+    .row,
+    .input-row,
+    .form-grid {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+
+    input,
+    select,
+    textarea {
+        width: 100% !important;
+        min-height: 44px !important;
+        padding: 10px 12px !important;
+        font-size: 16px !important;
+        border-radius: 12px !important;
+        box-sizing: border-box !important;
+    }
+
+    textarea {
+        min-height: 110px !important;
+        resize: vertical;
+    }
+
+    /* Bảng -> cuộn ngang thay vì vỡ layout */
+    .table-wrap,
+    .table-responsive,
+    .student-table-wrap,
+    .score-table-wrap,
+    .attendance-table-wrap {
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        border-radius: 14px;
+    }
+
+    table,
+    .table,
+    .student-table,
+    .score-table,
+    .attendance-table {
+        min-width: 720px;
+    }
+
+    th, td {
+        padding: 10px 12px !important;
+        white-space: nowrap;
+        font-size: 14px !important;
+    }
+
+    /* Tiêu đề */
+    h1 {
+        font-size: 24px !important;
+        line-height: 1.25 !important;
+    }
+
+    h2 {
+        font-size: 20px !important;
+        line-height: 1.3 !important;
+    }
+
+    h3 {
+        font-size: 17px !important;
+        line-height: 1.35 !important;
+    }
+
+    p, li, span, label, a {
+        word-break: break-word;
+    }
+
+    /* Nếu có khối fixed gây che màn hình trên mobile thì hạ xuống */
+    .support-box,
+    .hotline-box,
+    .floating-box,
+    .floating-support,
+    .fixed-support {
+        position: static !important;
+        width: 100% !important;
+        right: auto !important;
+        bottom: auto !important;
+        margin-top: 12px !important;
+    }
+
+    /* Modal/menu mobile bị đen xì */
+    .modal,
+    .dropdown-menu,
+    .mobile-menu,
+    .sidebar.open,
+    .menu-overlay,
+    .overlay {
+        max-width: 100vw !important;
+    }
+
+    .overlay,
+    .menu-overlay {
+        background: rgba(0, 0, 0, 0.35) !important;
+    }
+}
+
+/* Điện thoại nhỏ */
+@media (max-width: 480px) {
+    html {
+        font-size: 14px;
+    }
+
+    .container,
+    .main-container,
+    .page-container,
+    .dashboard-container,
+    .class-wrapper,
+    .content-wrapper,
+    .content,
+    .main-content,
+    .page-content {
+        padding: 10px !important;
+    }
+
+    .card,
+    .panel,
+    .box,
+    .section,
+    .info-card,
+    .stat-card,
+    .tool-card,
+    .student-card {
+        padding: 12px !important;
+        border-radius: 14px !important;
+    }
+
+    h1 {
+        font-size: 22px !important;
+    }
+
+    h2 {
+        font-size: 18px !important;
+    }
+
+    h3 {
+        font-size: 16px !important;
+    }
 }
