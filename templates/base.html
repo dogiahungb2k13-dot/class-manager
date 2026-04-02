@@ -1,79 +1,165 @@
-<!DOCTYPE html>
-<html lang="vi" data-theme="light">
+<!doctype html>
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Class Manager{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <style>
+        .mobile-sidebar-toggle {
+            display: none;
+            position: fixed;
+            top: 14px;
+            left: 14px;
+            z-index: 1200;
+            width: 46px;
+            height: 46px;
+            border: none;
+            border-radius: 14px;
+            background: rgba(37, 99, 235, 0.95);
+            color: #fff;
+            font-size: 24px;
+            font-weight: 700;
+            box-shadow: 0 10px 30px rgba(37, 99, 235, 0.35);
+            cursor: pointer;
+        }
+
+        .sidebar-overlay {
+            display: none;
+        }
+
+        @media (max-width: 900px) {
+            .mobile-sidebar-toggle {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .sidebar-overlay {
+                position: fixed;
+                inset: 0;
+                background: rgba(2, 6, 23, 0.58);
+                z-index: 1090;
+            }
+
+            body.sidebar-open .sidebar-overlay {
+                display: block;
+            }
+
+            .app-shell {
+                display: block !important;
+            }
+
+            .sidebar {
+                position: fixed !important;
+                top: 0;
+                left: 0;
+                width: min(84vw, 320px) !important;
+                height: 100vh !important;
+                max-width: 320px;
+                z-index: 1100;
+                transform: translateX(-105%);
+                transition: transform 0.28s ease;
+                overflow-y: auto;
+            }
+
+            body.sidebar-open .sidebar {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                width: 100% !important;
+                margin-left: 0 !important;
+                padding-top: 82px !important;
+            }
+
+            .topbar {
+                padding-left: 58px !important;
+            }
+
+            .topbar h1 {
+                font-size: 2rem !important;
+            }
+
+            .topbar-subtitle {
+                font-size: 0.98rem !important;
+            }
+
+            .user-box {
+                max-width: 100%;
+            }
+        }
+    </style>
 </head>
 <body>
-    <div class="mobile-overlay" id="mobileOverlay"></div>
+    <button class="mobile-sidebar-toggle" id="mobileSidebarToggle" type="button" aria-label="Mở menu">☰</button>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-    <header class="app-header">
-        <div class="header-left">
-            <button class="menu-toggle" id="menuToggle" type="button" aria-label="Mở menu">
-                ☰
-            </button>
-
-            <a href="{{ url_for('home') }}" class="brand">
-                <div class="brand-logo">CM</div>
-                <div class="brand-text">
-                    <h1>Class Manager</h1>
-                    <p>Learning Dashboard</p>
-                </div>
-            </a>
-        </div>
-
-        <div class="header-right">
-            <button class="theme-toggle" id="themeToggle" type="button">
-                <span class="theme-icon">🌙</span>
-                <span class="theme-text">Dark mode</span>
-            </button>
-
-            {% if session.get('user_id') %}
-            <div class="user-chip">
-                <div class="user-avatar">{{ session.get('full_name', 'U')[0]|upper }}</div>
-                <div class="user-meta">
-                    <strong>{{ session.get('full_name') }}</strong>
-                    <small>{% if session.get('role') == 'teacher' %}Giáo viên{% else %}Học sinh{% endif %}</small>
-                </div>
-            </div>
-            {% endif %}
-        </div>
-    </header>
+    <div class="bg-orb orb-1"></div>
+    <div class="bg-orb orb-2"></div>
+    <div class="bg-grid"></div>
 
     <div class="app-shell">
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar-head">
+        <aside class="sidebar" id="appSidebar">
+            <div class="brand-block">
+                <div class="brand-logo">CM</div>
                 <div>
-                    <div class="sidebar-title">Class Manager</div>
-                    <div class="sidebar-subtitle">Quản lý lớp học hiện đại</div>
+                    <h2>Class Manager</h2>
+                    <p>Learning Dashboard</p>
                 </div>
-                <button class="sidebar-close" id="sidebarClose" type="button" aria-label="Đóng menu">✕</button>
             </div>
 
-            <nav class="sidebar-nav">
+            <nav class="nav-menu">
                 {% if session.get('user_id') %}
-                    <a href="{{ url_for('home') }}">Trang chủ</a>
+                    <a href="{{ url_for('dashboard') }}" class="nav-link">Trang chủ</a>
                     {% if session.get('role') == 'teacher' %}
-                        <a href="{{ url_for('create_class') }}">Tạo lớp</a>
-                        <a href="{{ url_for('download_template') }}">File mẫu Excel</a>
+                        <a href="{{ url_for('create_class') }}" class="nav-link">Tạo lớp</a>
+                        <a href="{{ url_for('download_student_template') }}" class="nav-link">File mẫu Excel</a>
                     {% endif %}
-                    <a href="{{ url_for('logout') }}">Đăng xuất</a>
+                    <a href="{{ url_for('logout') }}" class="nav-link danger-link">Đăng xuất</a>
                 {% else %}
-                    <a href="{{ url_for('home') }}">Trang chủ</a>
-                    <a href="{{ url_for('login') }}">Đăng nhập</a>
-                    <a href="{{ url_for('register') }}">Đăng ký</a>
+                    <a href="{{ url_for('home') }}" class="nav-link">Trang chủ</a>
+                    <a href="{{ url_for('login') }}" class="nav-link">Đăng nhập</a>
+                    <a href="{{ url_for('register') }}" class="nav-link">Đăng ký</a>
                 {% endif %}
             </nav>
+
+            <div class="sidebar-footer">
+                <div class="mini-card">
+                    <strong>Class Manager</strong>
+                    <span>Quản lý lớp học hiện đại</span>
+                </div>
+            </div>
         </aside>
 
         <main class="main-content">
-            <section class="hero-card">
-                <div class="hero-badge">Class Manager</div>
-                <h2>{% block page_title %}Class Manager{% endblock %}</h2>
-                <p>Nền tảng quản lý lớp học trực quan và tối ưu</p>
-            </section>
+            <header class="topbar">
+                <div>
+                    <h1>{% block page_title %}Class Manager{% endblock %}</h1>
+                    <p class="topbar-subtitle">Nền tảng quản lý lớp học trực quan và tối ưu</p>
+                </div>
+
+                {% if session.get('user_id') %}
+                    <div class="user-box">
+                        <div class="avatar-circle">
+                            {{ session.get('full_name', 'U')[0]|upper }}
+                        </div>
+                        <div>
+                            <strong>{{ session.get('full_name') }}</strong>
+                            <div class="role-text">
+                                {% if session.get('role') == 'teacher' %}
+                                    Giáo viên
+                                {% else %}
+                                    Học sinh
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+            </header>
 
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
@@ -88,65 +174,32 @@
     </div>
 
     <script>
-        (function () {
-            const root = document.documentElement;
-            const savedTheme = localStorage.getItem("cm-theme") || "light";
-            root.setAttribute("data-theme", savedTheme);
+        document.addEventListener("DOMContentLoaded", function () {
+            const toggleBtn = document.getElementById("mobileSidebarToggle");
+            const overlay = document.getElementById("sidebarOverlay");
 
-            const themeToggle = document.getElementById("themeToggle");
-            const themeText = themeToggle?.querySelector(".theme-text");
-            const themeIcon = themeToggle?.querySelector(".theme-icon");
-
-            function syncThemeButton() {
-                const current = root.getAttribute("data-theme") || "light";
-                if (!themeText || !themeIcon) return;
-                if (current === "dark") {
-                    themeText.textContent = "Light mode";
-                    themeIcon.textContent = "☀️";
-                } else {
-                    themeText.textContent = "Dark mode";
-                    themeIcon.textContent = "🌙";
-                }
+            function toggleSidebar() {
+                document.body.classList.toggle("sidebar-open");
             }
 
-            syncThemeButton();
-
-            themeToggle?.addEventListener("click", function () {
-                const current = root.getAttribute("data-theme") || "light";
-                const next = current === "dark" ? "light" : "dark";
-                root.setAttribute("data-theme", next);
-                localStorage.setItem("cm-theme", next);
-                syncThemeButton();
-            });
-
-            const body = document.body;
-            const sidebar = document.getElementById("sidebar");
-            const overlay = document.getElementById("mobileOverlay");
-            const menuToggle = document.getElementById("menuToggle");
-            const sidebarClose = document.getElementById("sidebarClose");
-
-            function openMenu() {
-                body.classList.add("menu-open");
-                sidebar?.classList.add("open");
-                overlay?.classList.add("show");
+            function closeSidebar() {
+                document.body.classList.remove("sidebar-open");
             }
 
-            function closeMenu() {
-                body.classList.remove("menu-open");
-                sidebar?.classList.remove("open");
-                overlay?.classList.remove("show");
+            if (toggleBtn) {
+                toggleBtn.addEventListener("click", toggleSidebar);
             }
 
-            menuToggle?.addEventListener("click", openMenu);
-            sidebarClose?.addEventListener("click", closeMenu);
-            overlay?.addEventListener("click", closeMenu);
+            if (overlay) {
+                overlay.addEventListener("click", closeSidebar);
+            }
 
             window.addEventListener("resize", function () {
-                if (window.innerWidth > 768) {
-                    closeMenu();
+                if (window.innerWidth > 900) {
+                    closeSidebar();
                 }
             });
-        })();
+        });
     </script>
 </body>
 </html>
