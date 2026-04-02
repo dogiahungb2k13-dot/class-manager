@@ -126,21 +126,6 @@ def init_db():
     conn = get_db()
     cur = conn.cursor()
 
-    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
-    users_exists = cur.fetchone() is not None
-
-    if users_exists:
-        user_columns = [row[1] for row in cur.execute("PRAGMA table_info(users)").fetchall()]
-        if "email" not in user_columns:
-            cur.execute("DROP TABLE IF EXISTS student_questions")
-            cur.execute("DROP TABLE IF EXISTS attendance")
-            cur.execute("DROP TABLE IF EXISTS scores")
-            cur.execute("DROP TABLE IF EXISTS announcements")
-            cur.execute("DROP TABLE IF EXISTS enrollments")
-            cur.execute("DROP TABLE IF EXISTS classes")
-            cur.execute("DROP TABLE IF EXISTS users")
-            conn.commit()
-
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS users (
@@ -257,6 +242,7 @@ def init_db():
     classes_without_code = cur.execute(
         "SELECT id FROM classes WHERE class_code IS NULL OR class_code = ''"
     ).fetchall()
+
     for row in classes_without_code:
         cur.execute(
             "UPDATE classes SET class_code = ? WHERE id = ?",
@@ -315,11 +301,6 @@ def ensure_user_can_access_class(conn, class_id):
         return class_info, enrolled is not None
 
     return class_info, False
-
-
-@app.before_request
-def ensure_database():
-    init_db()
 
 
 @app.route("/")
@@ -553,7 +534,7 @@ def create_class():
                 flash("Tạo lớp thành công nhưng không đọc được file Excel.", "error")
                 return redirect(url_for("class_detail", class_id=class_id))
             finally:
-                if 'filepath' in locals() and os.path.exists(filepath):
+                if "filepath" in locals() and os.path.exists(filepath):
                     os.remove(filepath)
 
         conn.close()
@@ -1267,6 +1248,7 @@ def download_student_template():
     )
 
 
+init_db()
+
 if __name__ == "__main__":
-    init_db()
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
