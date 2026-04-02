@@ -8,6 +8,8 @@ from io import BytesIO
 import os
 import random
 import string
+import re
+import unicodedata
 import pandas as pd
 
 app = Flask(__name__)
@@ -84,6 +86,183 @@ def make_safe_email(full_name):
 
 def make_safe_phone():
     return f"09{random.randint(10000000, 99999999)}"
+
+
+def normalize_text(value):
+    text = str(value or "").strip().lower()
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = text.replace("đ", "d")
+    text = re.sub(r"[^a-z0-9]+", "", text)
+    return text
+
+
+EXCEL_COLUMN_ALIASES = {
+    "full_name": {
+        "fullname", "full_name", "name", "studentname", "hoten", "hovaten",
+        "hotenhs", "hovatenhs", "tenhocsinh", "hocsinh", "ten"
+    },
+    "email": {
+        "email", "mail", "gmail", "studentemail", "emaillienhe", "diachiemail"
+    },
+    "phone_number": {
+        "phone", "phonenumber", "phone_number", "mobile", "sdt",
+        "sodienthoai", "so_dt", "so_dien_thoai", "dienthoai"
+    },
+    "birth_date": {
+        "birthdate", "birthday", "birth_date", "dob", "ngaysinh"
+    },
+}
+
+
+def make_unique_email(conn, raw_email, full_name):
+    email = str(raw_email or "").strip().lower()
+    if email and email != "nan":
+        existing = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+        if not existing:
+            return email
+
+        user = conn.execute("SELECT role FROM users WHERE id = ?", (existing["id"],)).fetchone()
+        if user and user["role"] == "student":
+            return email
+
+    base_name = normalize_text(full_name) or "student"
+    while True:
+        generated = f"{base_name}{random.randint(1000, 9999)}@classmanager.local"
+        exists = conn.execute("SELECT 1 FROM users WHERE email = ?", (generated,)).fetchone()
+        if not exists:
+            return generated
+
+
+def detect_header_row(raw_df, scan_rows=12):
+    best_index = 0
+    best_score = -1
+    alias_values = set().union(*EXCEL_COLUMN_ALIASES.values())
+
+    limit = min(len(raw_df.index), scan_rows)
+    for idx in range(limit):
+        values = [normalize_text(v) for v in raw_df.iloc[idx].tolist()]
+        score = sum(1 for v in values if v in alias_values)
+        if any(v in EXCEL_COLUMN_ALIASES["full_name"] for v in values):
+            score += 3
+        if any(v in EXCEL_COLUMN_ALIASES["email"] for v in values):
+            score += 2
+        if score > best_score:
+            best_score = score
+            best_index = idx
+
+    return best_index
+
+
+def build_dataframe_from_excel(filepath):
+    raw_df = pd.read_excel(filepath, header=None, dtype=str)
+    raw_df = raw_df.fillna("")
+
+    if raw_df.empty:
+        raise ValueError("File Excel không có dữ liệu.")
+
+    header_index = detect_header_row(raw_df)
+    header_values = []
+    seen = {}
+
+    for idx, value in enumerate(raw_df.iloc[header_index].tolist()):
+        original_header = str(value or "").strip()
+        header = original_header or f"unnamed_{idx}"
+
+        if header in seen:
+            seen[header] += 1
+            header = f"{header}_{seen[header]}"
+        else:
+            seen[header] = 1
+
+        header_values.append(header)
+
+    df = raw_df.iloc[header_index + 1:].copy()
+    df.columns = header_values
+    df = df.fillna("")
+
+    non_empty_mask = df.apply(
+        lambda row: any(str(cell).strip() for cell in row.tolist()),
+        axis=1
+    )
+    df = df[non_empty_mask].reset_index(drop=True)
+    return df
+
+
+def find_excel_column(df, field_name):
+    aliases = EXCEL_COLUMN_ALIASES[field_name]
+    for col in df.columns:
+        if normalize_text(col) in aliases:
+            return col
+    return None
+
+
+def process_student_excel(conn, class_id, filepath):
+    df = build_dataframe_from_excel(filepath)
+
+    name_col = find_excel_column(df, "full_name")
+    email_col = find_excel_column(df, "email")
+    phone_col = find_excel_column(df, "phone_number")
+    birth_col = find_excel_column(df, "birth_date")
+
+    if not name_col:
+        raise ValueError(
+            "Không tìm thấy cột tên học sinh. Hãy dùng một trong các tên cột như: full_name, name, Họ và tên."
+        )
+
+    created_count = 0
+    enrolled_count = 0
+    skipped_count = 0
+
+    for _, row in df.iterrows():
+        full_name = str(row.get(name_col, "")).strip()
+        email = str(row.get(email_col, "")).strip().lower() if email_col else ""
+        phone_number = str(row.get(phone_col, "")).strip() if phone_col else ""
+        birth_date = str(row.get(birth_col, "")).strip() if birth_col else ""
+
+        if email == "nan":
+            email = ""
+        if phone_number == "nan":
+            phone_number = ""
+        if birth_date == "nan":
+            birth_date = ""
+
+        if not full_name:
+            skipped_count += 1
+            continue
+
+        if not phone_number:
+            phone_number = make_safe_phone()
+
+        email = make_unique_email(conn, email, full_name)
+        default_password = phone_number
+
+        user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+
+        if user and user["role"] != "student":
+            skipped_count += 1
+            continue
+
+        if not user:
+            conn.execute(
+                "INSERT INTO users (full_name, email, password, role, created_at) VALUES (?, ?, ?, ?, ?)",
+                (full_name, email, generate_password_hash(default_password), "student", now_iso())
+            )
+            conn.commit()
+            user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+            created_count += 1
+
+        try:
+            conn.execute(
+                "INSERT INTO enrollments (class_id, student_id, joined_at) VALUES (?, ?, ?)",
+                (class_id, user["id"], now_iso())
+            )
+            conn.commit()
+            enrolled_count += 1
+        except sqlite3.IntegrityError:
+            pass
+
+    return created_count, enrolled_count, skipped_count
 
 
 def parse_score(value):
@@ -596,72 +775,12 @@ def create_class():
             excel_file.save(filepath)
 
             try:
-                df = pd.read_excel(filepath)
-                df = df.fillna("")
-                df.columns = [str(col).strip().lower() for col in df.columns]
-
-                def find_col(possible_names):
-                    for col in df.columns:
-                        if str(col).strip().lower() in possible_names:
-                            return col
-                    return None
-
-                name_col = find_col({"full_name", "name", "ho_ten", "hoten", "ten", "họ tên"})
-                email_col = find_col({"email", "mail", "gmail"})
-                phone_col = find_col({"phone_number", "phone", "sdt", "so_dien_thoai", "số điện thoại"})
-                birth_col = find_col({"birth_date", "birthday", "ngay_sinh", "ngày sinh", "dob"})
-
-                for _, row in df.iterrows():
-                    full_name = str(row[name_col]).strip() if name_col else ""
-                    email = str(row[email_col]).strip().lower() if email_col else ""
-                    phone_number = str(row[phone_col]).strip() if phone_col else ""
-                    birth_date = str(row[birth_col]).strip() if birth_col else ""
-
-                    if email.lower() == "nan":
-                        email = ""
-                    if phone_number.lower() == "nan":
-                        phone_number = ""
-                    if birth_date.lower() == "nan":
-                        birth_date = ""
-
-                    if not full_name:
-                        skipped_count += 1
-                        continue
-
-                    if not email:
-                        email = make_safe_email(full_name)
-                    if not phone_number:
-                        phone_number = make_safe_phone()
-                    if not birth_date:
-                        birth_date = "2008-01-01"
-
-                    default_password = phone_number
-
-                    user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
-                    if not user:
-                        conn.execute(
-                            "INSERT INTO users (full_name, email, password, role, created_at) VALUES (?, ?, ?, ?, ?)",
-                            (full_name, email, generate_password_hash(default_password), "student", now_iso())
-                        )
-                        conn.commit()
-                        user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
-                        created_count += 1
-
-                    try:
-                        conn.execute(
-                            "INSERT INTO enrollments (class_id, student_id, joined_at) VALUES (?, ?, ?)",
-                            (class_id, user["id"], now_iso())
-                        )
-                        conn.commit()
-                        enrolled_count += 1
-                    except sqlite3.IntegrityError:
-                        pass
-
-            except Exception:
+                created_count, enrolled_count, skipped_count = process_student_excel(conn, class_id, filepath)
+            except Exception as e:
+                conn.close()
                 if os.path.exists(filepath):
                     os.remove(filepath)
-                conn.close()
-                flash("Tạo lớp thành công nhưng không đọc được file Excel.", "error")
+                flash(f"Tạo lớp thành công nhưng không đọc được file Excel: {e}", "error")
                 return redirect(url_for("class_detail", class_id=class_id))
             finally:
                 if "filepath" in locals() and os.path.exists(filepath):
@@ -1192,77 +1311,13 @@ def import_students_excel(class_id):
     file.save(filepath)
 
     try:
-        df = pd.read_excel(filepath)
-        df = df.fillna("")
-        df.columns = [str(col).strip().lower() for col in df.columns]
-
-        def find_col(possible_names):
-            for col in df.columns:
-                if str(col).strip().lower() in possible_names:
-                    return col
-            return None
-
-        name_col = find_col({"full_name", "name", "ho_ten", "hoten", "ten", "họ tên"})
-        email_col = find_col({"email", "mail", "gmail"})
-        phone_col = find_col({"phone_number", "phone", "sdt", "so_dien_thoai", "số điện thoại"})
-        birth_col = find_col({"birth_date", "birthday", "ngay_sinh", "ngày sinh", "dob"})
-
-        created_count = 0
-        enrolled_count = 0
-        skipped_count = 0
-
-        for _, row in df.iterrows():
-            full_name = str(row[name_col]).strip() if name_col else ""
-            email = str(row[email_col]).strip().lower() if email_col else ""
-            phone_number = str(row[phone_col]).strip() if phone_col else ""
-            birth_date = str(row[birth_col]).strip() if birth_col else ""
-
-            if email.lower() == "nan":
-                email = ""
-            if phone_number.lower() == "nan":
-                phone_number = ""
-            if birth_date.lower() == "nan":
-                birth_date = ""
-
-            if not full_name:
-                skipped_count += 1
-                continue
-
-            if not email:
-                email = make_safe_email(full_name)
-            if not phone_number:
-                phone_number = make_safe_phone()
-            if not birth_date:
-                birth_date = "2008-01-01"
-
-            default_password = phone_number
-
-            user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
-            if not user:
-                conn.execute(
-                    "INSERT INTO users (full_name, email, password, role, created_at) VALUES (?, ?, ?, ?, ?)",
-                    (full_name, email, generate_password_hash(default_password), "student", now_iso())
-                )
-                conn.commit()
-                user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
-                created_count += 1
-
-            try:
-                conn.execute(
-                    "INSERT INTO enrollments (class_id, student_id, joined_at) VALUES (?, ?, ?)",
-                    (class_id, user["id"], now_iso())
-                )
-                conn.commit()
-                enrolled_count += 1
-            except sqlite3.IntegrityError:
-                pass
-
+        created_count, enrolled_count, skipped_count = process_student_excel(conn, class_id, filepath)
         flash(
             f"Nhập Excel thành công. Tạo mới {created_count} học sinh, thêm vào lớp {enrolled_count} học sinh, bỏ qua {skipped_count} dòng không hợp lệ.",
             "success"
         )
-    except Exception:
-        flash("Không đọc được file Excel. Hãy kiểm tra định dạng file.", "error")
+    except Exception as e:
+        flash(f"Không đọc được file Excel: {e}", "error")
     finally:
         conn.close()
         if os.path.exists(filepath):
