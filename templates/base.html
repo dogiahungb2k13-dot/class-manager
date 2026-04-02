@@ -176,10 +176,16 @@
             <nav class="nav-menu">
                 {% if session.get('user_id') %}
                     <a href="{{ url_for('dashboard') }}" class="nav-link mobile-nav-link">Trang chủ</a>
+
+                    {% if is_admin_user %}
+                        <a href="{{ url_for('admin_users') }}" class="nav-link mobile-nav-link">Quản trị tài khoản</a>
+                    {% endif %}
+
                     {% if session.get('role') == 'teacher' %}
                         <a href="{{ url_for('create_class') }}" class="nav-link mobile-nav-link">Tạo lớp</a>
                         <a href="{{ url_for('download_student_template') }}" class="nav-link mobile-nav-link">File mẫu Excel</a>
                     {% endif %}
+
                     <a href="{{ url_for('logout') }}" class="nav-link danger-link mobile-nav-link">Đăng xuất</a>
                 {% else %}
                     <a href="{{ url_for('home') }}" class="nav-link mobile-nav-link">Trang chủ</a>
@@ -211,7 +217,9 @@
                         <div>
                             <strong>{{ session.get('full_name') }}</strong>
                             <div class="role-text">
-                                {% if session.get('role') == 'teacher' %}
+                                {% if is_admin_user %}
+                                    Admin
+                                {% elif session.get('role') == 'teacher' %}
                                     Giáo viên
                                 {% else %}
                                     Học sinh
