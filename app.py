@@ -18,6 +18,9 @@ ALLOWED_ROLES = {"teacher", "student"}
 ALLOWED_EXTENSIONS = {"xlsx", "xls"}
 ATTENDANCE_STATUSES = {"present", "late", "absent"}
 
+# Đổi email này thành email admin của bạn
+ADMIN_EMAILS = {"admin@classmanager.com"}
+
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
@@ -46,6 +49,13 @@ def format_dt(value):
 @app.template_filter("datetime_format")
 def datetime_format_filter(value):
     return format_dt(value)
+
+
+@app.context_processor
+def inject_global_flags():
+    return {
+        "is_admin_user": session.get("email") in ADMIN_EMAILS
+    }
 
 
 def generate_class_code(length=8):
@@ -273,6 +283,23 @@ def teacher_required(f):
     return wrapper
 
 
+def is_admin():
+    return session.get("email") in ADMIN_EMAILS
+
+
+def admin_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get("user_id"):
+            flash("Vui lòng đăng nhập trước.", "error")
+            return redirect(url_for("login"))
+        if not is_admin():
+            flash("Bạn không có quyền truy cập trang admin.", "error")
+            return redirect(url_for("dashboard"))
+        return f(*args, **kwargs)
+    return wrapper
+
+
 def ensure_user_can_access_class(conn, class_id):
     class_info = conn.execute(
         """
@@ -355,6 +382,7 @@ def login():
             session["user_id"] = user["id"]
             session["full_name"] = user["full_name"]
             session["role"] = user["role"]
+            session["email"] = user["email"]
             flash("Đăng nhập thành công.", "success")
             return redirect(url_for("dashboard"))
 
@@ -426,6 +454,108 @@ def dashboard():
 
     conn.close()
     return render_template("dashboard_student.html", classes=classes, available=available)
+
+
+@app.route("/admin/users")
+@login_required
+@admin_required
+def admin_users():
+    conn = get_db()
+    users = conn.execute(
+        """
+        SELECT
+            u.id,
+            u.full_name,
+            u.email,
+            u.role,
+            u.created_at,
+            (SELECT COUNT(*) FROM classes c WHERE c.teacher_id = u.id) AS total_classes,
+            (SELECT COUNT(*) FROM enrollments e WHERE e.student_id = u.id) AS total_enrollments
+        FROM users u
+        ORDER BY u.id DESC
+        """
+    ).fetchall()
+    conn.close()
+    return render_template("admin_users.html", users=users)
+
+
+@app.route("/admin/users/<int:user_id>/role", methods=["POST"])
+@login_required
+@admin_required
+def admin_update_user_role(user_id):
+    new_role = request.form.get("role", "").strip()
+
+    if new_role not in {"student", "teacher"}:
+        flash("Vai trò không hợp lệ.", "error")
+        return redirect(url_for("admin_users"))
+
+    conn = get_db()
+    user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+
+    if not user:
+        conn.close()
+        flash("Không tìm thấy tài khoản.", "error")
+        return redirect(url_for("admin_users"))
+
+    conn.execute("UPDATE users SET role = ? WHERE id = ?", (new_role, user_id))
+    conn.commit()
+    conn.close()
+
+    flash("Đã cập nhật vai trò.", "success")
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/users/<int:user_id>/reset-password", methods=["POST"])
+@login_required
+@admin_required
+def admin_reset_password(user_id):
+    new_password = request.form.get("new_password", "").strip()
+
+    if len(new_password) < 4:
+        flash("Mật khẩu mới phải có ít nhất 4 ký tự.", "error")
+        return redirect(url_for("admin_users"))
+
+    conn = get_db()
+    user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+
+    if not user:
+        conn.close()
+        flash("Không tìm thấy tài khoản.", "error")
+        return redirect(url_for("admin_users"))
+
+    conn.execute(
+        "UPDATE users SET password = ? WHERE id = ?",
+        (generate_password_hash(new_password), user_id)
+    )
+    conn.commit()
+    conn.close()
+
+    flash(f"Đã đặt lại mật khẩu cho {user['email']}.", "success")
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/users/<int:user_id>/delete", methods=["POST"])
+@login_required
+@admin_required
+def admin_delete_user(user_id):
+    if user_id == session.get("user_id"):
+        flash("Không thể tự xóa chính tài khoản admin đang đăng nhập.", "error")
+        return redirect(url_for("admin_users"))
+
+    conn = get_db()
+    user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+
+    if not user:
+        conn.close()
+        flash("Không tìm thấy tài khoản.", "error")
+        return redirect(url_for("admin_users"))
+
+    conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+
+    flash("Đã xóa tài khoản.", "success")
+    return redirect(url_for("admin_users"))
 
 
 @app.route("/create-class", methods=["GET", "POST"])
